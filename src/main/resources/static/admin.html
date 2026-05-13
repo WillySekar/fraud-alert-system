@@ -1,0 +1,156 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Risk Monitoring Dashboard</title>
+
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
+
+    <style>
+        body {
+            background-color: #121212;
+            color: #ffffff;
+        }
+
+        .card {
+            background-color: #1e1e1e;
+        }
+
+        .live-glow {
+            animation: glow 1.5s ease-in-out infinite alternate;
+        }
+
+        @keyframes glow {
+            from { box-shadow: 0 0 5px #ff0000; }
+            to   { box-shadow: 0 0 20px #ff0000; }
+        }
+    </style>
+</head>
+
+<body>
+
+<div class="container-fluid mt-4">
+
+    <!-- HEADER -->
+    <div class="row mb-4">
+        <div class="col">
+            <h2>🛡️ Risk Monitoring Admin Panel</h2>
+        </div>
+    </div>
+
+    <!-- STATS -->
+    <div class="row mb-4">
+        <div class="col-md-4">
+            <div class="card text-bg-danger shadow">
+                <div class="card-body">
+                    <h6>CRITICAL Alerts</h6>
+                    <h2 id="criticalCount">0</h2>
+                </div>
+            </div>
+        </div>
+
+        <div class="col-md-4">
+            <div class="card text-bg-warning shadow">
+                <div class="card-body">
+                    <h6>HIGH Alerts</h6>
+                    <h2 id="highCount">0</h2>
+                </div>
+            </div>
+        </div>
+
+        <div class="col-md-4">
+            <div class="card text-bg-secondary shadow">
+                <div class="card-body">
+                    <h6>Total Alerts</h6>
+                    <h2 id="totalCount">0</h2>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- LIVE ALERTS -->
+    <h4 class="text-danger mb-3">🚨 Live Alerts</h4>
+    <div id="liveAlerts" class="mb-5"></div>
+
+    <!-- HISTORY ALERTS -->
+    <h4 class="text-info mb-3">📜 Alert History</h4>
+    <div id="historyAlerts"></div>
+
+</div>
+
+<!-- JS LIBS -->
+<script src="https://cdn.jsdelivr.net/npm/sockjs-client/dist/sockjs.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/stompjs/lib/stomp.min.js"></script>
+
+<script>
+    let critical = 0;
+    let high = 0;
+    let total = 0;
+
+    // Load history first
+    fetch('/api/alerts')
+        .then(res => res.json())
+        .then(data => {
+            data.forEach(alert => renderAlert(alert, false));
+        });
+
+    // WebSocket
+    var socket = new SockJS('/ws');
+    var stompClient = Stomp.over(socket);
+
+    stompClient.connect({}, function () {
+        stompClient.subscribe('/topic/admin-alerts', function (message) {
+            var alert = JSON.parse(message.body);
+            renderAlert(alert, true);
+        });
+    });
+
+    function renderAlert(alert, isLive) {
+
+        let border = "border-secondary";
+        let glow = "";
+
+        if (alert.riskLevel === "HIGH") {
+            border = "border-warning";
+            high++;
+        }
+
+        if (alert.riskLevel === "CRITICAL") {
+            border = "border-danger";
+            glow = "live-glow";
+            critical++;
+        }
+
+        total++;
+
+        updateCounters();
+
+        let card = document.createElement("div");
+        card.className = "card text-white mb-3 shadow border-3 " + border + " " + glow;
+
+        let date = alert.timestamp ? new Date(alert.timestamp) : new Date();
+
+        card.innerHTML =
+            "<div class='card-body'>" +
+            "<h6 class='card-title'>User: " + alert.userId + "</h6>" +
+            "<p class='card-text'>Reason: " + alert.reason + "</p>" +
+            "<span class='badge bg-dark'>Risk Level: " + alert.riskLevel + " </span><br>" +
+            "<small class='card-muted'>" + date.toLocaleString() + "</small>" +
+            "</div>";
+
+        if (isLive) {
+            document.getElementById("liveAlerts").prepend(card);
+        } else {
+            document.getElementById("historyAlerts").append(card);
+        }
+    }
+
+    function updateCounters() {
+        document.getElementById("criticalCount").innerText = critical;
+        document.getElementById("highCount").innerText = high;
+        document.getElementById("totalCount").innerText = total;
+    }
+</script>
+
+</body>
+</html>
